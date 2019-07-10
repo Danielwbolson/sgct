@@ -81,7 +81,8 @@ void myInitOGLFun()
     myLandscapeDisplayList = glGenLists(1);
     glNewList(myLandscapeDisplayList, GL_COMPILE);
 
-    drawXZGrid(landscapeSize, -1.5f);
+	// -1.2192 is 4ft in meters for our cave
+    drawXZGrid(landscapeSize, -1.2192f /*-1.5f*/);
 
     //pick a seed for the random function (must be same on all nodes)
     srand(9745);

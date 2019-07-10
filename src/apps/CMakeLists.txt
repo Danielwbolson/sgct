@@ -34,6 +34,8 @@ endif()
 #force sgct to build
 link_libraries(${LIB_NAME})
 
+add_subdirectory(IVLAB_Unity)
+
 add_subdirectory(calibrator)
 add_subdirectory(clustertest)
 add_subdirectory(dataTransfer_opengl3)
