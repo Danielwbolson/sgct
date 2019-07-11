@@ -24,7 +24,7 @@ namespace util {
 	}
 
 	static const std::string fileToString(std::string filename) {
-		std::string f = "./shaders/" + filename;
+		std::string f = "../../../../src/apps/IVLAB_Unity/" + filename;
 		std::ifstream file(f);
 		std::stringstream buf;
 		buf << file.rdbuf();

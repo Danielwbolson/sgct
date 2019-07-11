@@ -1,7 +1,7 @@
-#version 330 core
+#version 410 core
 
-vec3 inPosition;
-vec2 inTex;
+in vec3 inPosition;
+in vec2 inTexcoords;
 
 void main() {
 	gl_Position.xyz = inPosition;
