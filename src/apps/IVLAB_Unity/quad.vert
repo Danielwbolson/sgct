@@ -3,7 +3,10 @@
 in vec3 inPosition;
 in vec2 inTexcoords;
 
+out vec2 texCoordsFrag;
+
 void main() {
-	gl_Position.xyz = inPosition;
-	gl_Position.w = 1.0;
+	gl_Position = vec4(inPosition, 1.0);
+
+	texCoordsFrag = inTexcoords;
 }

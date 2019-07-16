@@ -1,7 +1,13 @@
 #version 410 core
 
-out vec3 color;
+// Same name as in vert shader
+in vec2 texCoordsFrag;
+
+// Our texture
+uniform sampler2D tex;
+
+out vec4 color;
 
 void main(){
-  color = vec3(0,1,0);
+  color = texture(tex, texCoordsFrag);
 }

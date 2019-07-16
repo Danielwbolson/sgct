@@ -7,11 +7,12 @@ sgct::Engine* gEngine;
 GLuint vao_vertexContainer;
 GLuint vbo_positionBuffer, vbo_textureBuffer, vbo_indices_buffer;
 GLuint shaderProgram;
+GLuint texture;
 
 // Quad vertices
 std::vector<GLfloat> position_buffer_data = {
-	-0.8f, 0.8f, 0.0f,  // Top Left
 	-0.8f, -0.8f, 0.0f, // Bottom Left
+	-0.8f, 0.8f, 0.0f,  // Top Left
 	0.8f, 0.8f, 0.0f,   // Top Right
 	0.8f, -0.8f, 0.0f   // Bottom Right
 };
@@ -27,14 +28,18 @@ std::vector<GLfloat> texture_buffer_data = {
 // Quad indices coords
 std::vector<GLuint> indices_buffer_data = {
 	0,1,2,
-	1,3,2
+	0,2,3
 };
+
+const std::string texturePath = "images/lion_king.png";
 
 void Init();
 void drawQuad();
 
 int main(int argc, char* argv[])
 {
+
+	/****** * * * * * SGCT Initialization * * * * * *****/
 	gEngine = new sgct::Engine(argc, argv);
 
 	if (!gEngine->init())
@@ -45,6 +50,8 @@ int main(int argc, char* argv[])
 
 	//Bind your draw function to the render loop
 	gEngine->setDrawFunction(drawQuad);
+	/***** * * * * * END SGCT INITIALIZATION * * * * * ******/
+
 
 	/* Potential code for Unity
 	// Getting proj and view matrices for each window/viewport pairing
@@ -70,10 +77,8 @@ int main(int argc, char* argv[])
 	// Main loop
 	gEngine->render();
 
-	// Clean up
+	// Clean up and exit
 	delete gEngine;
-
-	// Exit program
 	exit(EXIT_SUCCESS);
 }
 
@@ -88,6 +93,19 @@ void Init() {
 	// Generate and bind our vao, our geometry container that holds vbos
 	glGenVertexArrays(1, &vao_vertexContainer);
 	glBindVertexArray(vao_vertexContainer);
+
+
+
+	// Generate our texture
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	sgct_core::Image img;
+	img.loadPNG(texturePath);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.getWidth(), img.getHeight(), 0, GL_BGRA, GL_UNSIGNED_BYTE, img.getData());
+
+	// Connect our texture
+	GLint textureUniform = glGetUniformLocation(shaderProgram, "tex");
+	glUniform1i(glGetUniformLocation(shaderProgram, "tex"), 0);
 
 
 
