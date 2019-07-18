@@ -2,17 +2,19 @@
 #include "sgct.h"
 #include "Utility.h"
 
-sgct::Engine* gEngine;
+sgct::Engine* _gEngine;
 
-GLuint vao_vertexContainer;
-GLuint vbo_positionBuffer, vbo_textureBuffer, vbo_indices_buffer;
-GLuint shaderProgram;
-GLuint texture;
+GLuint _vao_vertex_container;
+GLuint _vbo_position_buffer, _vbo_uv_buffer, _vbo_indices_buffer;
+GLuint _shader_program;
+GLuint _texture;
 
-sgct_core::Image* img;
+sgct_core::Image* _img;
+const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/lion_king.png";
+//const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/test2.png";
 
 // Quad vertices
-const std::vector<GLfloat> position_buffer_data = {
+const std::vector<GLfloat> _position_buffer_data = {
 	-0.8f, -0.8f, 0.0f, // Bottom Left : 0
 	-0.8f, 0.8f, 0.0f,  // Top Left : 1
 	0.8f, 0.8f, 0.0f,   // Top Right : 2
@@ -20,7 +22,7 @@ const std::vector<GLfloat> position_buffer_data = {
 };
 
 // Quad texture coords
-const std::vector<GLfloat> texture_buffer_data = {
+const std::vector<GLfloat> _uv_buffer_data = {
 	0.0f, 0.0f,
 	0.0f, 1.0f,
 	1.0f, 1.0f,
@@ -28,32 +30,31 @@ const std::vector<GLfloat> texture_buffer_data = {
 };
 
 // Quad indices coords
-const std::vector<GLuint> indices_buffer_data = {
+const std::vector<GLuint> _indices_buffer_data = {
 	0,3,1,
 	3,2,1
 };
 
-const std::string texturePath = "../../../../src/apps/IVLAB_Unity/images/lion_king.png";
-//const std::string texturePath = "../../../../src/apps/IVLAB_Unity/images/test2.png";
-
-void Init();
+void init();
 void drawQuad();
 
 int main(int argc, char* argv[])
 {
-
 	/****** * * * * * SGCT Initialization * * * * * *****/
-	gEngine = new sgct::Engine(argc, argv);
 
-	if (!gEngine->init())
+	_gEngine = new sgct::Engine(argc, argv);
+
+	//Bind your draw function to the render loop
+	_gEngine->setInitOGLFunction(init);
+	_gEngine->setDrawFunction(drawQuad);
+
+	if (!_gEngine->init())
 	{
-		delete gEngine;
+		delete _gEngine;
 		return EXIT_FAILURE;
 	}
 
-	//Bind your draw function to the render loop
-	gEngine->setDrawFunction(drawQuad);
-	/***** * * * * * END SGCT INITIALIZATION * * * * * ******/
+	/****** * * * * * END SGCT Initialization * * * * * *****/
 
 
 	/* Potential code for Unity
@@ -74,91 +75,90 @@ int main(int argc, char* argv[])
 	}
 	*/
 
-	//Init geometry, buffers, shader
-	Init();
-
 	// Main loop
-	gEngine->render();
+	_gEngine->render();
 
 	// Clean up engine, opengl and exit
-	delete gEngine;
-	delete img;
-	glDeleteShader(shaderProgram);
-	glDeleteBuffers(1, &vbo_indices_buffer);
-	glDeleteBuffers(1, &vbo_positionBuffer);
-	glDeleteBuffers(1, &vbo_textureBuffer);
-	glDeleteVertexArrays(1, &vao_vertexContainer);
-	glDeleteTextures(1, &texture);
+	delete _gEngine;
+	delete _img;
+	glDeleteProgram(_shader_program);
+	glDeleteBuffers(1, &_vbo_indices_buffer);
+	glDeleteBuffers(1, &_vbo_position_buffer);
+	glDeleteBuffers(1, &_vbo_uv_buffer);
+	glDeleteVertexArrays(1, &_vao_vertex_container);
+	glDeleteTextures(1, &_texture);
 
 	exit(EXIT_SUCCESS);
 }
 
 // Initializes our quad and tex coordinates
-void Init() {
+void init() {
+
+	/***** * * * * * SHADER AND VAO (GEOMETRY OBJECT) * * * * * *****/
 	// Set up our shader program
-	shaderProgram = util::initShaderFromFiles("quad.vert", "quad.frag");
-	//glEnable(GL_DEPTH_TEST);
-
-
+	_shader_program = util::initShaderFromFiles("quad.vert", "quad.frag");
+	glEnable(GL_DEPTH_TEST);
 
 	// Generate and bind our vao, our geometry container that holds vbos
-	glGenVertexArrays(1, &vao_vertexContainer);
-	glBindVertexArray(vao_vertexContainer);
+	glGenVertexArrays(1, &_vao_vertex_container);
+	glBindVertexArray(_vao_vertex_container);
 
 
-
+	/***** * * * * * TEXTURE * * * * * *****/
 	// Load our image
-	img = new sgct_core::Image();
-	bool loaded = img->loadPNG(texturePath);
+	_img = new sgct_core::Image();
+	bool loaded = _img->loadPNG(_texture_path);
 
-	// Generate our opengl texture
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	//unsigned char* data = img->getData();
-	//for (int i = 0; i < 64; i++) {
-	//	printf("%x\n", data[i]);
-	//}
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, static_cast<GLsizei>(img->getWidth()), static_cast<GLsizei>(img->getHeight()));
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(img->getWidth()), static_cast<GLsizei>(img->getHeight()), GL_BGRA, GL_UNSIGNED_BYTE, img->getData());
+	// Generate opengl reference to texture
+	glGenTextures(1, &_texture);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, _texture);
 
+	// Create texture
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(_img->getWidth()), static_cast<GLsizei>(_img->getHeight()), 0, GL_BGRA, GL_UNSIGNED_BYTE, _img->getData());
+
+	// Texture paramters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Render settings for Alpha in images
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
+	/***** * * * * * VBOS (INFO PER VERTEX) * * * * * *****/
 	// Generate our positionbuffer
-	glGenBuffers(1, &vbo_positionBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_positionBuffer); // Bind our vertexBuffer to be our current buffer
-	glBufferData(GL_ARRAY_BUFFER, position_buffer_data.size() * sizeof(GL_FLOAT), &(position_buffer_data[0]), GL_STATIC_DRAW); // Assign vertex data
-																				// Do this way to get pointer to vector location (worked in engine)
-	// Connect our positionbuffer to our position input for our vert shader
-	GLint positionAttrib = glGetAttribLocation(shaderProgram, "inPosition");
+	glGenBuffers(1, &_vbo_position_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, _vbo_position_buffer); // Bind our vertexBuffer to be our current buffer
+	glBufferData(GL_ARRAY_BUFFER, _position_buffer_data.size() * sizeof(GL_FLOAT), &(_position_buffer_data[0]), GL_STATIC_DRAW); // Assign vertex data
+	// Connect our positionbuffer to our position input for our shader
+	GLint positionAttrib = glGetAttribLocation(_shader_program, "inPosition");
 	glEnableVertexAttribArray(positionAttrib);
 	glVertexAttribPointer(positionAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	//Attribute, vals per attrib, type, isNormalized, stride, offset
 
+	// UV buffer
+	glGenBuffers(1, &_vbo_uv_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, _vbo_uv_buffer);
+	glBufferData(GL_ARRAY_BUFFER, _uv_buffer_data.size() * sizeof(GL_FLOAT), &(_uv_buffer_data[0]), GL_STATIC_DRAW);
+	GLint uvAttrib = glGetAttribLocation(_shader_program, "inUV");
+	glEnableVertexAttribArray(uvAttrib);
+	glVertexAttribPointer(uvAttrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+	// Indices buffer
+	glGenBuffers(1, &_vbo_indices_buffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, _indices_buffer_data.size() * sizeof(GL_UNSIGNED_INT), &(_indices_buffer_data[0]), GL_STATIC_DRAW);
 
 
-	// Generate our texturebuffer
-	glGenBuffers(1, &vbo_textureBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_textureBuffer);
-	glBufferData(GL_ARRAY_BUFFER, texture_buffer_data.size() * sizeof(GL_FLOAT), &(texture_buffer_data[0]), GL_STATIC_DRAW);
 
-	// Connect our texturebuffer to our texture input for our vert shader
-	GLint textureAttrib = glGetAttribLocation(shaderProgram, "inUV");
-	glEnableVertexAttribArray(textureAttrib);
-	glVertexAttribPointer(textureAttrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
-	//Attribute, vals per attrib, type, isNormalized, stride, offset
-
-
-
-	// Generate our indicesbuffer
-	glGenBuffers(1, &vbo_indices_buffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_indices_buffer);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_buffer_data.size() * sizeof(GL_UNSIGNED_INT), &(indices_buffer_data[0]), GL_STATIC_DRAW);
-
-	// Let go of our vertex array until we need it again, avoid changing it on accident
+	/***** * * * * * CLEANUP * * * * * *****/
+	// Let go of our vertex array and texture until we need it again, avoid changing it on accident
 	glBindVertexArray(0);
+	glActiveTexture(GL_TEXTURE0);
 }
 
 // http://www.opengl-tutorial.org/beginners-tutorials/tutorial-2-the-first-triangle/
@@ -170,16 +170,16 @@ void drawQuad() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Bind our shader and vao
-	glUseProgram(shaderProgram);
-	glBindVertexArray(vao_vertexContainer);
+	glUseProgram(_shader_program);
+	glBindVertexArray(_vao_vertex_container);
 
-	// Connect our texture
+	// Bind our texture uniform
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "tex"), 0);
+	glBindTexture(GL_TEXTURE_2D, _texture);
+	glUniform1i(glGetUniformLocation(_shader_program, "tex"), 0);
 
-	// Bind our indices
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_indices_buffer);
-	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices_buffer_data.size()), GL_UNSIGNED_INT, 0);
+	// Bind our geometry object and indices
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
+	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(_indices_buffer_data.size()), GL_UNSIGNED_INT, 0);
 }
 // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-9-vbo-indexing/
