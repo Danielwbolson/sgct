@@ -9,5 +9,5 @@ uniform sampler2D tex;
 out vec4 color;
 
 void main(){
-  color = texture(tex, fragUV); /*vec4(fragUV, 0, 1);*/
+  color = texture(tex, fragUV); /*vec4(1, 0, 0, 1);*/
 }
