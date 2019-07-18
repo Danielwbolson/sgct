@@ -2,6 +2,9 @@
 #include "sgct.h"
 #include "Utility.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 sgct::Engine* _gEngine;
 
 GLuint _vao_vertex_container;
@@ -141,41 +144,25 @@ void init() {
 
 
 	/***** * * * * * TEXTURE * * * * * *****/
+	// stbi has different coordinate system than opengl
+	stbi_set_flip_vertically_on_load(true);
+
 	// Load our image
-	_img = new sgct_core::Image();
-	bool loaded = _img->load(_texture_path);
+	int width, height, components;
+	unsigned char* pixels = stbi_load(_texture_path.c_str(),
+		&width, &height, &components, STBI_rgb_alpha);
 
 	// Generate opengl reference to texture
 	glGenTextures(1, &_texture);
 	glBindTexture(GL_TEXTURE_2D, _texture);
 
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-	// Find out texture variables (Taken from TextureManager.cpp)
-	// Find out if we are rgb or bgr and number of channels
-	unsigned int bpc = static_cast<unsigned int>(_img->getBytesPerChannel());
-
-	bool isBGR = _img->getPreferBGRImport();
-	GLint textureType = isBGR ? GL_BGR : GL_RGB;
-	GLint internalFormat = (bpc == 1 ? GL_RGB8 : GL_RGB16);
-	GLenum format = (bpc == 1 ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT);
-
-	if (_img->getChannels() == 4) {
-		textureType = isBGR ? GL_BGRA : GL_RGBA;
-		internalFormat = (bpc == 1 ? GL_RGBA8 : GL_RGBA16);
-	}
-	else if (_img->getChannels() == 1) {
-		textureType = GL_LUMINANCE;
-		internalFormat = (bpc == 1 ? GL_RG8 : GL_RG16);
-	}
-	else if (_img->getChannels() == 2) {
-		textureType = GL_LUMINANCE_ALPHA;
-		internalFormat = (bpc == 1 ? GL_LUMINANCE8_ALPHA8 : GL_LUMINANCE16_ALPHA16);
-	}
+	// Texture variables
+	GLint internalFormat = GL_RGBA8;
+	GLint textureType = GL_RGBA;
+	GLenum format = GL_UNSIGNED_BYTE;
 
 	// Create texture
-	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, static_cast<GLsizei>(_img->getWidth()), static_cast<GLsizei>(_img->getHeight()), 0, textureType, format, _img->getData());
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, textureType, format, pixels);
 
 	// Texture paramters
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -194,6 +181,7 @@ void init() {
 	// Let go of our vertex array and texture until we need it again, avoid changing it on accident
 	glActiveTexture(GL_TEXTURE0);
 	glUseProgram(GL_FALSE);
+	stbi_image_free(pixels);
 }
 
 // http://www.opengl-tutorial.org/beginners-tutorials/tutorial-2-the-first-triangle/
