@@ -10,8 +10,8 @@ GLuint _shader_program;
 GLuint _texture;
 
 sgct_core::Image* _img;
-const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/lion_king.png";
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/test2.png";
+const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/water.png";
 
 // Quad vertices
 const std::vector<GLfloat> _position_buffer_data = {
@@ -20,7 +20,6 @@ const std::vector<GLfloat> _position_buffer_data = {
 	0.8f, 0.8f, 0.0f,   // Top Right : 2
 	0.8f, -0.8f, 0.0f   // Bottom Right : 3
 };
-
 // Quad texture coords
 const std::vector<GLfloat> _uv_buffer_data = {
 	0.0f, 0.0f,
@@ -28,15 +27,19 @@ const std::vector<GLfloat> _uv_buffer_data = {
 	1.0f, 1.0f,
 	1.0f, 0.0f
 };
-
 // Quad indices coords
 const std::vector<GLuint> _indices_buffer_data = {
 	0,3,1,
 	3,2,1
 };
+sgct::SharedBool reload_shader(false); // bool for hot-reloading shader
 
-void init();
-void drawQuad();
+
+
+void init(); // OpenGL Initialization
+void drawQuad(); // Drawing funciton
+void keyCallback(int key, int action); // Allow user keyboard input
+void shaderReload(); // Allow shader reload on press of "r"
 
 int main(int argc, char* argv[])
 {
@@ -47,6 +50,8 @@ int main(int argc, char* argv[])
 	//Bind your draw function to the render loop
 	_gEngine->setInitOGLFunction(init);
 	_gEngine->setDrawFunction(drawQuad);
+	_gEngine->setPostSyncPreDrawFunction(shaderReload);
+	_gEngine->setKeyboardCallbackFunction(keyCallback);
 
 	if (!_gEngine->init())
 	{
@@ -97,41 +102,15 @@ void init() {
 	/***** * * * * * SHADER AND VAO (GEOMETRY OBJECT) * * * * * *****/
 	// Set up our shader program
 	_shader_program = util::initShaderFromFiles("quad.vert", "quad.frag");
-	glEnable(GL_DEPTH_TEST);
+	glUseProgram(_shader_program);
 
+
+
+	/***** * * * * * VAO (GEOMETRY OBJECT) AND VBOS (INFO PER VERTEX) * * * * * *****/
 	// Generate and bind our vao, our geometry container that holds vbos
 	glGenVertexArrays(1, &_vao_vertex_container);
 	glBindVertexArray(_vao_vertex_container);
 
-
-	/***** * * * * * TEXTURE * * * * * *****/
-	// Load our image
-	_img = new sgct_core::Image();
-	bool loaded = _img->loadPNG(_texture_path);
-
-	// Generate opengl reference to texture
-	glGenTextures(1, &_texture);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, _texture);
-
-	// Create texture
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(_img->getWidth()), static_cast<GLsizei>(_img->getHeight()), 0, GL_BGRA, GL_UNSIGNED_BYTE, _img->getData());
-
-	// Texture paramters
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-
-	// Render settings for Alpha in images
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-
-	/***** * * * * * VBOS (INFO PER VERTEX) * * * * * *****/
 	// Generate our positionbuffer
 	glGenBuffers(1, &_vbo_position_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, _vbo_position_buffer); // Bind our vertexBuffer to be our current buffer
@@ -155,12 +134,66 @@ void init() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, _indices_buffer_data.size() * sizeof(GL_UNSIGNED_INT), &(_indices_buffer_data[0]), GL_STATIC_DRAW);
 
+	// Unbind for good habit
+	glBindBuffer(GL_ARRAY_BUFFER, GL_FALSE);
+	glBindVertexArray(GL_FALSE);
+
+
+
+	/***** * * * * * TEXTURE * * * * * *****/
+	// Load our image
+	_img = new sgct_core::Image();
+	bool loaded = _img->load(_texture_path);
+
+	// Generate opengl reference to texture
+	glGenTextures(1, &_texture);
+	glBindTexture(GL_TEXTURE_2D, _texture);
+
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	// Find out texture variables (Taken from TextureManager.cpp)
+	// Find out if we are rgb or bgr and number of channels
+	unsigned int bpc = static_cast<unsigned int>(_img->getBytesPerChannel());
+
+	bool isBGR = _img->getPreferBGRImport();
+	GLint textureType = isBGR ? GL_BGR : GL_RGB;
+	GLint internalFormat = (bpc == 1 ? GL_RGB8 : GL_RGB16);
+	GLenum format = (bpc == 1 ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT);
+
+	if (_img->getChannels() == 4) {
+		textureType = isBGR ? GL_BGRA : GL_RGBA;
+		internalFormat = (bpc == 1 ? GL_RGBA8 : GL_RGBA16);
+	}
+	else if (_img->getChannels() == 1) {
+		textureType = GL_LUMINANCE;
+		internalFormat = (bpc == 1 ? GL_RG8 : GL_RG16);
+	}
+	else if (_img->getChannels() == 2) {
+		textureType = GL_LUMINANCE_ALPHA;
+		internalFormat = (bpc == 1 ? GL_LUMINANCE8_ALPHA8 : GL_LUMINANCE16_ALPHA16);
+	}
+
+	// Create texture
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, static_cast<GLsizei>(_img->getWidth()), static_cast<GLsizei>(_img->getHeight()), 0, textureType, format, _img->getData());
+
+	// Texture paramters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Render settings for Alpha in images
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 
 
 	/***** * * * * * CLEANUP * * * * * *****/
 	// Let go of our vertex array and texture until we need it again, avoid changing it on accident
-	glBindVertexArray(0);
 	glActiveTexture(GL_TEXTURE0);
+	glUseProgram(GL_FALSE);
 }
 
 // http://www.opengl-tutorial.org/beginners-tutorials/tutorial-2-the-first-triangle/
@@ -170,6 +203,9 @@ void drawQuad() {
 	// Clear the screen
 	glClearColor(0, 0, 0, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// Enable properties
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
 
 	// Bind our shader and vao
 	glUseProgram(_shader_program);
@@ -183,5 +219,32 @@ void drawQuad() {
 	// Bind our geometry object and indices
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
 	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(_indices_buffer_data.size()), GL_UNSIGNED_INT, 0);
+
+
+	// Cleanup
+	glBindVertexArray(GL_FALSE);
+	glUseProgram(GL_FALSE);
+	// Disable properties
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
 }
-// http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-9-vbo-indexing/
+
+void keyCallback(int key, int action) {
+	if (_gEngine->isMaster()) {
+		switch (key) {
+		case SGCT_KEY_R:
+			if (action == SGCT_PRESS)
+				reload_shader.setVal(true);
+			break;
+		}
+	}
+}
+
+void shaderReload() {
+	if (reload_shader.getVal()) {
+		reload_shader.setVal(false); //reset
+
+		sgct::ShaderProgram sp = sgct::ShaderManager::instance()->getShaderProgram("quad_shader");
+		sp.reload();
+	}
+}
