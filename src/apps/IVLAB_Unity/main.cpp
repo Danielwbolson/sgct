@@ -47,7 +47,7 @@ void shaderReload(); // Allow shader reload on press of "r"
 int main(int argc, char* argv[])
 {
 	/****** * * * * * SGCT Initialization * * * * * *****/
-
+	// Create engine
 	_gEngine = new sgct::Engine(argc, argv);
 
 	//Bind your draw function to the render loop
@@ -56,13 +56,12 @@ int main(int argc, char* argv[])
 	_gEngine->setPostSyncPreDrawFunction(shaderReload);
 	_gEngine->setKeyboardCallbackFunction(keyCallback);
 
-	if (!_gEngine->init())
-	{
+	// Initialize engine
+	if (!_gEngine->init()) {
 		delete _gEngine;
 		return EXIT_FAILURE;
 	}
 
-	/****** * * * * * END SGCT Initialization * * * * * *****/
 
 
 	/* Potential code for Unity
@@ -83,8 +82,12 @@ int main(int argc, char* argv[])
 	}
 	*/
 
+
+
 	// Main loop
 	_gEngine->render();
+
+
 
 	// Clean up engine, opengl and exit
 	delete _gEngine;
@@ -101,7 +104,6 @@ int main(int argc, char* argv[])
 
 // Initializes our quad and tex coordinates
 void init() {
-
 	/***** * * * * * SHADER AND VAO (GEOMETRY OBJECT) * * * * * *****/
 	// Set up our shader program
 	_shader_program = util::initShaderFromFiles("quad.vert", "quad.frag");
@@ -194,6 +196,7 @@ void drawQuad() {
 	// Enable properties
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
+
 
 	// Bind our shader and vao
 	glUseProgram(_shader_program);
