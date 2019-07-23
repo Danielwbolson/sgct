@@ -7,16 +7,47 @@ sgct::Engine* _gEngine;
 GLuint _vao_vertex_container;
 GLuint _vbo_position_buffer, _vbo_uv_buffer, _vbo_indices_buffer;
 
-//const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/lion_king.png";
+const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/square.png";
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/test2.png";
-const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/water.png";
+//const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/water.png";
 
-// Quad vertices
+// Quad vertices (ordering is BL, TL, TR, BR)
 const std::vector<GLfloat> _position_buffer_data = {
-	-0.8f, -0.8f, 0.0f, // Bottom Left : 0
-	-0.8f, 0.8f, 0.0f,  // Top Left : 1
-	0.8f, 0.8f, 0.0f,   // Top Right : 2
-	0.8f, -0.8f, 0.0f   // Bottom Right : 3
+	// FLOOR with ordering
+	-0.8f, -0.8f, -0.8f,  // Back Left : 0
+	-0.8f, -0.8f, 0.8f,   // Front Left : 1
+	0.8f, -0.8f, 0.8f,    // Front Right : 2
+	0.8f, -0.8f, -0.8f,   // Back Right : 3
+
+	// UP with ordering
+	0.8f, 0.8f, -0.8f,   // Back Left : 4
+	0.8f, 0.8f, 0.8f,    // Front Left : 5
+	-0.8f, 0.8f, 0.8f,   // Front Right : 6
+	-0.8f, 0.8f, -0.8f,  // Back Right : 7
+	
+	// LEFT
+	-0.8f, -0.8f, -0.8f, // 8
+	-0.8f, 0.8f, -0.8f,  // 9
+	-0.8f, 0.8f, 0.8f,   // 10
+	-0.8f, -0.8f, 0.8f,  // 11
+
+	// FORWARD
+	-0.8f, -0.8f, 0.8f, // 12
+	-0.8f, 0.8f, 0.8f,  // 13
+	0.8f, 0.8f, 0.8f,   // 14
+	0.8f, -0.8f, 0.8f,  // 15
+
+	// RIGHT
+	0.8f, -0.8f, 0.8f,  // 16
+	0.8f, 0.8f, 0.8f,   // 17
+	0.8f, 0.8f, -0.8f,  // 18
+	0.8f, -0.8f, -0.8f, // 19
+
+	// BACK
+	0.8f, -0.8f, -0.8f,  // 20
+	0.8f, 0.8f, -0.8f,   // 21
+	-0.8f, 0.8f, -0.8f,  // 22
+	-0.8f, -0.8f, -0.8f, // 23
 };
 
 // Quad texture coords
@@ -24,21 +55,54 @@ const std::vector<GLfloat> _uv_buffer_data = {
 	0.0f, 0.0f,
 	0.0f, 1.0f,
 	1.0f, 1.0f,
-	1.0f, 0.0f
+	1.0f, 0.0f,
+
+	0.0f, 0.0f,
+	0.0f, 1.0f,
+	1.0f, 1.0f,
+	1.0f, 0.0f,
+
+	0.0f, 0.0f,
+	0.0f, 1.0f,
+	1.0f, 1.0f,
+	1.0f, 0.0f,
+
+	0.0f, 0.0f,
+	0.0f, 1.0f,
+	1.0f, 1.0f,
+	1.0f, 0.0f,
+
+	0.0f, 0.0f,
+	0.0f, 1.0f,
+	1.0f, 1.0f,
+	1.0f, 0.0f,
+
+	0.0f, 0.0f,
+	0.0f, 1.0f,
+	1.0f, 1.0f,
+	1.0f, 0.0f,
 };
 
 // Quad indices coords
 const std::vector<GLuint> _indices_buffer_data = {
-	0,3,1,
-	3,2,1
+	0,3,1, 3,2,1,        // Quad FLOOR
+	4,7,5, 7,6,5,        // Quad UP
+	8,11,9, 11,10,9,     // Quad LEFT
+	12,15,13, 15,14,13,  // Quad FORWARD
+	16,19,17, 19,18,17,  // Quad RIGHT
+	20,13,21, 23,22,21   // Quad BACK
 };
 
 void init(); // OpenGL Initialization
 void drawQuad(); // Drawing funciton
 void keyCallback(int key, int action); // Allow user keyboard input
 void shaderReload(); // Allow shader reload on press of "r"
+void myPreSyncFun(); // Sync data between nodes
+void myEncodeFun(); // Used for synchorization between nodes
+void myDecodeFun(); // Used for synchorization between nodes
 
 sgct::SharedBool reload_shader(false); // bool for hot-reloading shader
+sgct::SharedDouble curr_time(0.0); // shared time
 
 int main(int argc, char* argv[])
 {
@@ -51,6 +115,9 @@ int main(int argc, char* argv[])
 	_gEngine->setDrawFunction(drawQuad);
 	_gEngine->setPostSyncPreDrawFunction(shaderReload);
 	_gEngine->setKeyboardCallbackFunction(keyCallback);
+	_gEngine->setPreSyncFunction(myPreSyncFun);
+	sgct::SharedData::instance()->setEncodeFunction(myEncodeFun);
+	sgct::SharedData::instance()->setDecodeFunction(myDecodeFun);
 
 	if (!_gEngine->init())
 	{
@@ -140,10 +207,22 @@ void init() {
 
 
 
-	/***** * * * * * TEXTURE * * * * * *****/
+	/***** * * * * * TEXTURES * * * * * *****/
 	sgct::TextureManager::instance()->setAnisotropicFilterSize(8.0f);
 	sgct::TextureManager::instance()->setCompression(sgct::TextureManager::S3TC_DXT);
-	sgct::TextureManager::instance()->loadTexture("quad_texture", _texture_path, true);
+
+	glActiveTexture(GL_TEXTURE0);
+	sgct::TextureManager::instance()->loadTexture("quad_texture0", _texture_path, true);
+	glActiveTexture(GL_TEXTURE1);
+	sgct::TextureManager::instance()->loadTexture("quad_texture1", _texture_path, true);
+	glActiveTexture(GL_TEXTURE2);
+	sgct::TextureManager::instance()->loadTexture("quad_texture2", _texture_path, true);
+	glActiveTexture(GL_TEXTURE3);
+	sgct::TextureManager::instance()->loadTexture("quad_texture3", _texture_path, true);
+	glActiveTexture(GL_TEXTURE4);
+	sgct::TextureManager::instance()->loadTexture("quad_texture4", _texture_path, true);
+	glActiveTexture(GL_TEXTURE5);
+	sgct::TextureManager::instance()->loadTexture("quad_texture5", _texture_path, true);
 
 	// Render settings for Alpha in images
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -165,22 +244,36 @@ void drawQuad() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	// Enable properties
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
+	glDisable(GL_CULL_FACE);
 
 
 	// Bind our shader and vao
 	sgct::ShaderManager::instance()->bindShaderProgram("quad_shader");
 	glBindVertexArray(_vao_vertex_container);
 
-	// Bind our texture uniform
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, sgct::TextureManager::instance()->getTextureId("quad_texture"));
-	glUniform1i(sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getUniformLocation("tex"), 0);
+	/***** * * * * * PVM Matrix * * * * * *****/
+	glm::mat4 scene_mat = glm::perspectiveFov(90.0f, 16.0f, 9.0f, 0.0f, 100.0f);
+	glm::mat4 pvm = _gEngine->getCurrentModelViewProjectionMatrix() * scene_mat;
 
-	// Bind our geometry object and indices
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
-	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(_indices_buffer_data.size()), GL_UNSIGNED_INT, 0);
+	glUniformMatrix4fv(
+		sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getUniformLocation("pvm"),
+		1,
+		GL_FALSE,
+		glm::value_ptr(pvm));
 
+	// Draw our 6 quads one buy one
+	for (int i = 0; i < 6; i++) {
+
+		// Bind our texture uniform
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, sgct::TextureManager::instance()->getTextureId("quad_texture" + std::to_string(i)));
+		glUniform1i(sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getUniformLocation("tex"), 0);
+
+		// Bind our geometry object and indices
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
+		glDrawElementsBaseVertex(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, i*4);
+
+	}
 
 	// Cleanup
 	glBindVertexArray(GL_FALSE);
@@ -208,4 +301,24 @@ void shaderReload() {
 		sgct::ShaderProgram sp = sgct::ShaderManager::instance()->getShaderProgram("quad_shader");
 		sp.reload();
 	}
+}
+
+void myPreSyncFun()
+{
+	//set the time only on the master
+	if (_gEngine->isMaster())
+	{
+		//get the time in seconds
+		curr_time.setVal(sgct::Engine::getTime());
+	}
+}
+
+void myEncodeFun()
+{
+	sgct::SharedData::instance()->writeDouble(&curr_time);
+}
+
+void myDecodeFun()
+{
+	sgct::SharedData::instance()->readDouble(&curr_time);
 }
