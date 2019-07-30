@@ -57,3 +57,10 @@ unsigned UdpSocketClient::sendMessage(const char* message, int length) {
 	}
 }
 
+unsigned UdpSocketClient::receiveMessage(char* message, const int length) {
+	// receive the message
+	if (recvfrom(m_socket, message, length, 0, (struct sockaddr *) &m_serverAddr, 0) == SOCKET_ERROR) {
+		std::cerr << " recvfrom() failed with error code: " << WSAGetLastError() << std::endl;
+		return 1;
+	}
+}

@@ -12,8 +12,11 @@ public:
 	UdpSocketClient();
 	UdpSocketClient(const char addr[INET6_ADDRSTRLEN], int port);
 
-	// One iteration through the main loop
+	// Send message to client
 	unsigned sendMessage(const char* message, int length);
+
+	// Receive message from client
+	unsigned receiveMessage(char* message, int length);
 
 	// Call once we're done
 	void cleanup();

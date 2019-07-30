@@ -107,6 +107,14 @@ bool UPDATE_IP = false; // Does the IP of the UDP client need to be updated?
 webserver* initServer = nullptr; // TCP server, used ONLY for initialization of connection between SGCT and Unity
 UdpSocketClient* udpServer = nullptr; // Server in charge of streaming between Unity and SGCT
 
+char* rawTextureBytes = nullptr;
+const int TEXTURE_BYTES_LENGTH = 960 * 1080 * 4 * 4; // size of screen capture, channels, num_images
+
+unsigned char* bytes_img_0 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+unsigned char* bytes_img_1 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+unsigned char* bytes_img_2 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+unsigned char* bytes_img_3 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+
 /// Files for textures
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/square.png";
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/test2.png";
@@ -202,76 +210,85 @@ void init() {
 		udpServer = new UdpSocketClient(UNITY_CLIENT.c_str(), TRACKING_PORT);
 		UPDATE_IP = false;
 		std::cout << "Starting UDP server on port " << TRACKING_PORT << "..." << std::endl;
+
+		// Set up buffers
+		rawTextureBytes = new char[TEXTURE_BYTES_LENGTH];
 	}
 
 
 	/***** * * * * * OPENGL SETUP * * * * * ******/
 	{
 		/***** * * * * * SHADER AND VAO (GEOMETRY OBJECT) * * * * * *****/
-		// Set up our shader program
-		sgct::ShaderManager::instance()->addShaderProgram("quad_shader",
-			"../../../../src/apps/IVLAB_Unity/src/shaders/quad.vert",
-			"../../../../src/apps/IVLAB_Unity/src/shaders/quad.frag");
+		{
+			// Set up our shader program
+			sgct::ShaderManager::instance()->addShaderProgram("quad_shader",
+				"../../../../src/apps/IVLAB_Unity/src/shaders/quad.vert",
+				"../../../../src/apps/IVLAB_Unity/src/shaders/quad.frag");
 
-		sgct::ShaderManager::instance()->bindShaderProgram("quad_shader");
+			sgct::ShaderManager::instance()->bindShaderProgram("quad_shader");
+		}
 
 
 
 		/***** * * * * * VAO (GEOMETRY OBJECT) AND VBOS (INFO PER VERTEX) * * * * * *****/
-		// Generate and bind our vao, our geometry container that holds vbos
-		glGenVertexArrays(1, &_vao_vertex_container);
-		glBindVertexArray(_vao_vertex_container);
+		{
+			// Generate and bind our vao, our geometry container that holds vbos
+			glGenVertexArrays(1, &_vao_vertex_container);
+			glBindVertexArray(_vao_vertex_container);
 
-		// Generate our positionbuffer
-		glGenBuffers(1, &_vbo_position_buffer);
-		glBindBuffer(GL_ARRAY_BUFFER, _vbo_position_buffer); // Bind our vertexBuffer to be our current buffer
-		glBufferData(GL_ARRAY_BUFFER, _position_buffer_data.size() * sizeof(GL_FLOAT), &(_position_buffer_data[0]), GL_STATIC_DRAW); // Assign vertex data
-		// Connect our positionbuffer to our position input for our shader
-		GLint positionAttrib = sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getAttribLocation("inPosition");
-		glEnableVertexAttribArray(positionAttrib);
-		glVertexAttribPointer(positionAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		//Attribute, vals per attrib, type, isNormalized, stride, offset
+			// Generate our positionbuffer
+			glGenBuffers(1, &_vbo_position_buffer);
+			glBindBuffer(GL_ARRAY_BUFFER, _vbo_position_buffer); // Bind our vertexBuffer to be our current buffer
+			glBufferData(GL_ARRAY_BUFFER, _position_buffer_data.size() * sizeof(GL_FLOAT), &(_position_buffer_data[0]), GL_STATIC_DRAW); // Assign vertex data
+			// Connect our positionbuffer to our position input for our shader
+			GLint positionAttrib = sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getAttribLocation("inPosition");
+			glEnableVertexAttribArray(positionAttrib);
+			glVertexAttribPointer(positionAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
+			//Attribute, vals per attrib, type, isNormalized, stride, offset
 
-		// UV buffer
-		glGenBuffers(1, &_vbo_uv_buffer);
-		glBindBuffer(GL_ARRAY_BUFFER, _vbo_uv_buffer);
-		glBufferData(GL_ARRAY_BUFFER, _uv_buffer_data.size() * sizeof(GL_FLOAT), &(_uv_buffer_data[0]), GL_STATIC_DRAW);
-		GLint uvAttrib = sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getAttribLocation("inUV");
-		glEnableVertexAttribArray(uvAttrib);
-		glVertexAttribPointer(uvAttrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+			// UV buffer
+			glGenBuffers(1, &_vbo_uv_buffer);
+			glBindBuffer(GL_ARRAY_BUFFER, _vbo_uv_buffer);
+			glBufferData(GL_ARRAY_BUFFER, _uv_buffer_data.size() * sizeof(GL_FLOAT), &(_uv_buffer_data[0]), GL_STATIC_DRAW);
+			GLint uvAttrib = sgct::ShaderManager::instance()->getShaderProgram("quad_shader").getAttribLocation("inUV");
+			glEnableVertexAttribArray(uvAttrib);
+			glVertexAttribPointer(uvAttrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
-		// Indices buffer
-		glGenBuffers(1, &_vbo_indices_buffer);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, _indices_buffer_data.size() * sizeof(GL_UNSIGNED_INT), &(_indices_buffer_data[0]), GL_STATIC_DRAW);
+			// Indices buffer
+			glGenBuffers(1, &_vbo_indices_buffer);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices_buffer);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, _indices_buffer_data.size() * sizeof(GL_UNSIGNED_INT), &(_indices_buffer_data[0]), GL_STATIC_DRAW);
 
-		// unbind to to defaults in order to avoid any accidental changes
-		glBindBuffer(GL_ARRAY_BUFFER, GL_FALSE);
-		glBindVertexArray(GL_FALSE);
+			// unbind to to defaults in order to avoid any accidental changes
+			glBindBuffer(GL_ARRAY_BUFFER, GL_FALSE);
+			glBindVertexArray(GL_FALSE);
+		}
 
 
 
 		/***** * * * * * TEXTURES * * * * * *****/
-		sgct::TextureManager::instance()->setAnisotropicFilterSize(8.0f);
-		sgct::TextureManager::instance()->setCompression(sgct::TextureManager::S3TC_DXT);
+		{
+			sgct::TextureManager::instance()->setAnisotropicFilterSize(8.0f);
+			sgct::TextureManager::instance()->setCompression(sgct::TextureManager::S3TC_DXT);
 
-		glActiveTexture(GL_TEXTURE0);
-		sgct::TextureManager::instance()->loadTexture("quad_texture0", _texture_path, true);
-		glActiveTexture(GL_TEXTURE1);
-		sgct::TextureManager::instance()->loadTexture("quad_texture1", _texture_path, true);
-		glActiveTexture(GL_TEXTURE2);
-		sgct::TextureManager::instance()->loadTexture("quad_texture2", _texture_path, true);
-		glActiveTexture(GL_TEXTURE3);
-		sgct::TextureManager::instance()->loadTexture("quad_texture3", _texture_path, true);
-		glActiveTexture(GL_TEXTURE4);
-		sgct::TextureManager::instance()->loadTexture("quad_texture4", _texture_path, true);
-		glActiveTexture(GL_TEXTURE5);
-		sgct::TextureManager::instance()->loadTexture("quad_texture5", _texture_path, true);
+			glActiveTexture(GL_TEXTURE0);
+			sgct::TextureManager::instance()->loadTexture("quad_texture0", _texture_path, true);
+			glActiveTexture(GL_TEXTURE1);
+			sgct::TextureManager::instance()->loadTexture("quad_texture1", _texture_path, true);
+			glActiveTexture(GL_TEXTURE2);
+			sgct::TextureManager::instance()->loadTexture("quad_texture2", _texture_path, true);
+			glActiveTexture(GL_TEXTURE3);
+			sgct::TextureManager::instance()->loadTexture("quad_texture3", _texture_path, true);
+			glActiveTexture(GL_TEXTURE4);
+			sgct::TextureManager::instance()->loadTexture("quad_texture4", _texture_path, true);
+			glActiveTexture(GL_TEXTURE5);
+			sgct::TextureManager::instance()->loadTexture("quad_texture5", _texture_path, true);
 
-		// Render settings for Alpha in images
-		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			// Render settings for Alpha in images
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		}
 
 
 
@@ -280,11 +297,8 @@ void init() {
 	}
 }
 
-// http://www.opengl-tutorial.org/beginners-tutorials/tutorial-2-the-first-triangle/
-// https://github.com/Danielwbolson/CppEngine/blob/master/CppEngine/src/MeshRendererSystem.cpp
-
 void mainLoop() {
-
+	
 	/***** * * * * * SERVER * * * * * ******/
 	{
 		// Assuming nothing un-registers
@@ -319,7 +333,46 @@ void mainLoop() {
 		//	printf("%x ", (unsigned char) bytes[i]);
 		//}
 		//printf("\n");
-		udpServer->sendMessage(bytes, length);
+
+		// If no error, do something
+		if (!udpServer->sendMessage(bytes, length)) {
+			// No error
+		}
+
+		// If no error, move our raw bytes into individual arrays and then update textures
+		if (!udpServer->receiveMessage(rawTextureBytes, TEXTURE_BYTES_LENGTH)) {
+			// Copy memory over
+			int offset = 0;
+
+			memcpy(bytes_img_0, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
+			offset += TEXTURE_BYTES_LENGTH / 4;
+
+			memcpy(bytes_img_1, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
+			offset += TEXTURE_BYTES_LENGTH / 4;
+
+			memcpy(bytes_img_2, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
+			offset += TEXTURE_BYTES_LENGTH / 4;
+
+			memcpy(bytes_img_3, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
+
+			// update textures
+			sgct_core::Image* img = new sgct_core::Image();
+
+			glActiveTexture(GL_TEXTURE0);
+			img->loadJPEG(bytes_img_0, TEXTURE_BYTES_LENGTH / 4);
+			sgct::TextureManager::instance()->loadTexture("quad_texture0", img, true);
+			glActiveTexture(GL_TEXTURE1);
+			img->loadJPEG(bytes_img_1, TEXTURE_BYTES_LENGTH / 4);
+			sgct::TextureManager::instance()->loadTexture("quad_texture1", img, true);
+			glActiveTexture(GL_TEXTURE2);
+			img->loadJPEG(bytes_img_2, TEXTURE_BYTES_LENGTH / 4);
+			sgct::TextureManager::instance()->loadTexture("quad_texture2", img, true);
+			glActiveTexture(GL_TEXTURE3);
+			img->loadJPEG(bytes_img_3, TEXTURE_BYTES_LENGTH / 4);
+			sgct::TextureManager::instance()->loadTexture("quad_texture3", img, true);
+
+			delete img;
+		}
 
 
 		delete matrix;
