@@ -24,16 +24,14 @@ unsigned UdpSocketClient::init() {
 
 	//Initialise winsock
 	std::cerr << "Initialising Winsock..." << std::endl;
-	if (WSAStartup(MAKEWORD(2, 2), &m_wsa) != 0)
-	{
+	if (WSAStartup(MAKEWORD(2, 2), &m_wsa) != 0) {
 		std::cerr << "Failed. Error Code: " << WSAGetLastError() << std::endl;
 		return 1;
 	}
 	std::cout << "Initialised" << std::endl;
 
 	//create socket
-	if ((m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == SOCKET_ERROR)
-	{
+	if ((m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == SOCKET_ERROR) {
 		std::cerr << " socket() failed with error code: " << WSAGetLastError() << std::endl;
 		return 1;
 	}
@@ -46,21 +44,30 @@ unsigned UdpSocketClient::init() {
 	inet_pton(AF_INET, (PSTR)m_addr, &outIP);
 	m_serverAddr.sin_addr.S_un.S_addr = outIP;
 
+	int result = bind(m_socket, (SOCKADDR*)&m_serverAddr, sizeof(m_serverAddr));
+	if (result == SOCKET_ERROR) {
+		int error = WSAGetLastError();
+		std::cerr << "Failed to bind: WSA Error " << error << std::endl;
+		exit(1);
+	}
 }
 
 unsigned UdpSocketClient::sendMessage(const char* message, int length) {
 	//send the message
-	if (sendto(m_socket, message, length, 0, (struct sockaddr *) &m_serverAddr, m_socketLen) == SOCKET_ERROR)
-	{
-		std::cerr << " sendto() failed with error code: " << WSAGetLastError() << std::endl;
+	if (sendto(m_socket, message, length, 0, (struct sockaddr *) &m_serverAddr, m_socketLen) == SOCKET_ERROR) {
+		int err = WSAGetLastError();
+		std::cerr << " sendto() failed with error code: " << err << std::endl;
 		return 1;
 	}
+	return 0;
 }
 
-unsigned UdpSocketClient::receiveMessage(char* message, const int length) {
-	// receive the message
-	if (recvfrom(m_socket, message, length, 0, (struct sockaddr *) &m_serverAddr, 0) == SOCKET_ERROR) {
-		std::cerr << " recvfrom() failed with error code: " << WSAGetLastError() << std::endl;
+unsigned UdpSocketClient::receiveMessage(char* message, int length) {
+	//send the message
+	if (recvfrom(m_socket, message, length, 0, nullptr, nullptr) == SOCKET_ERROR) {
+		int err = WSAGetLastError();
+		std::cerr << " recvfrom() failed with error code: " << err << std::endl;
 		return 1;
 	}
+	return 0;
 }

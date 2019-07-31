@@ -1,4 +1,5 @@
 
+#include <iostream>
 #include "sgct.h"
 #include "Utility.h"
 
@@ -107,13 +108,13 @@ bool UPDATE_IP = false; // Does the IP of the UDP client need to be updated?
 webserver* initServer = nullptr; // TCP server, used ONLY for initialization of connection between SGCT and Unity
 UdpSocketClient* udpServer = nullptr; // Server in charge of streaming between Unity and SGCT
 
-char* rawTextureBytes = nullptr;
-const int TEXTURE_BYTES_LENGTH = 960 * 1080 * 4 * 4; // size of screen capture, channels, num_images
-
-unsigned char* bytes_img_0 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
-unsigned char* bytes_img_1 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
-unsigned char* bytes_img_2 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
-unsigned char* bytes_img_3 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+/// Containers for textures from Unity
+const int TEXTURE_BYTES_LENGTH = 7896 * 4; // 64 * 64 * 3 * 4; //960 * 1080 * 3 * 4; // size of screen capture, channels, num_images
+unsigned char* rawTextureBytes = nullptr;
+unsigned char* bytes_img_0 = nullptr;
+unsigned char* bytes_img_1 = nullptr;
+unsigned char* bytes_img_2 = nullptr;
+unsigned char* bytes_img_3 = nullptr;
 
 /// Files for textures
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/square.png";
@@ -210,9 +211,6 @@ void init() {
 		udpServer = new UdpSocketClient(UNITY_CLIENT.c_str(), TRACKING_PORT);
 		UPDATE_IP = false;
 		std::cout << "Starting UDP server on port " << TRACKING_PORT << "..." << std::endl;
-
-		// Set up buffers
-		rawTextureBytes = new char[TEXTURE_BYTES_LENGTH];
 	}
 
 
@@ -288,6 +286,13 @@ void init() {
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+			// Buffer setup
+			rawTextureBytes = new unsigned char[TEXTURE_BYTES_LENGTH];
+			bytes_img_0 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+			bytes_img_1 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+			bytes_img_2 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
+			bytes_img_3 = new unsigned char[TEXTURE_BYTES_LENGTH / 4];
 		}
 
 
@@ -300,11 +305,10 @@ void init() {
 void mainLoop() {
 	
 	/***** * * * * * SERVER * * * * * ******/
+	// Assuming nothing un-registers
 	{
-		// Assuming nothing un-registers
-		//if (UNITY_CLIENT.empty() || UPDATE_IP) {
-		//	std::cout << "Unregistered, restarting..." << std::endl;
-		//}
+
+		// Make dummy matrix to send over
 		float* matrix = new float[64] {
 				1.0, 0.0, 0.0, 0.0,
 				0.0, 1.0, 0.0, 0.0,
@@ -327,33 +331,20 @@ void mainLoop() {
 				0.0, 0.0, 0.0, 1.0
 		};
 		int length = sizeof(float) * 64;
-
-		char* bytes = reinterpret_cast<char*>(matrix);
-		//for (int i = 0; i < length; i++) {
-		//	printf("%x ", (unsigned char) bytes[i]);
-		//}
-		//printf("\n");
+		unsigned char* bytes = reinterpret_cast<unsigned char*>(matrix);
 
 		// If no error, do something
-		if (!udpServer->sendMessage(bytes, length)) {
-			// No error
+		if (!udpServer->sendMessage(reinterpret_cast<char*>(bytes), length)) {
+			delete[] bytes;
 		}
 
 		// If no error, move our raw bytes into individual arrays and then update textures
-		if (!udpServer->receiveMessage(rawTextureBytes, TEXTURE_BYTES_LENGTH)) {
+		if (!udpServer->receiveMessage(reinterpret_cast<char*>(rawTextureBytes), TEXTURE_BYTES_LENGTH)) {
 			// Copy memory over
-			int offset = 0;
-
-			memcpy(bytes_img_0, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
-			offset += TEXTURE_BYTES_LENGTH / 4;
-
-			memcpy(bytes_img_1, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
-			offset += TEXTURE_BYTES_LENGTH / 4;
-
-			memcpy(bytes_img_2, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
-			offset += TEXTURE_BYTES_LENGTH / 4;
-
-			memcpy(bytes_img_3, rawTextureBytes + offset, TEXTURE_BYTES_LENGTH / 4);
+			bytes_img_0 = &rawTextureBytes[0];
+			bytes_img_1 = &rawTextureBytes[TEXTURE_BYTES_LENGTH / 4];
+			bytes_img_2 = &rawTextureBytes[TEXTURE_BYTES_LENGTH / 2];
+			bytes_img_3 = &rawTextureBytes[(int)(TEXTURE_BYTES_LENGTH * 3.0f / 4.0f)];
 
 			// update textures
 			sgct_core::Image* img = new sgct_core::Image();
@@ -373,9 +364,6 @@ void mainLoop() {
 
 			delete img;
 		}
-
-
-		delete matrix;
 	}
 
 	/***** * * * * * OPENGL * * * * ******/ 
@@ -471,19 +459,15 @@ void requestHandler(webserver::http_request* r) {
 		r->answer_ += "</title></head><body>";
 		r->answer_ += body;
 		r->answer_ += "</body></html>";
-	}
-	else if (r->path_ == "/register") {
+	} else if (r->path_ == "/register") {
 		UNITY_CLIENT = r->params_["ip"];
 		r->answer_ = "Registered";
 		UPDATE_IP = true;
-	}
-	else if (r->path_ == "/unregister") {
+	} else if (r->path_ == "/unregister") {
 		UNITY_CLIENT = "";
 		r->answer_ = "Unregistered";
-	}
-	else {
+	} else {
 		r->status_ = "404 Not Found";
 		r->answer_ = "Wrong URL";
 	}
-
 }
