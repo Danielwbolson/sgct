@@ -1,25 +1,25 @@
 #include <stdio.h>
 #include <iostream>
-#include "UdpSocketClient.h"
+#include "UdpSocketReceiver.h"
 
 const char DEFAULT_HOST[INET6_ADDRSTRLEN] = "128.101.106.85";
 const int DEFAULT_PORT = 5001;
 
-UdpSocketClient::UdpSocketClient() : UdpSocketClient(DEFAULT_HOST, DEFAULT_PORT) {};
+UdpSocketReceiver::UdpSocketReceiver() : UdpSocketReceiver(DEFAULT_HOST, DEFAULT_PORT) {};
 
-UdpSocketClient::UdpSocketClient(const char addr[INET6_ADDRSTRLEN], int port) {
+UdpSocketReceiver::UdpSocketReceiver(const char addr[INET6_ADDRSTRLEN], int port) {
 	m_port = port;
 	strcpy_s(m_addr, addr);
 
 	init();
 }
 
-void UdpSocketClient::cleanup() {
+void UdpSocketReceiver::cleanup() {
 	closesocket(m_socket);
 	WSACleanup();
 }
 
-unsigned UdpSocketClient::init() {
+unsigned UdpSocketReceiver::init() {
 	m_socket, m_socketLen = sizeof(m_serverAddr);
 
 	//Initialise winsock
@@ -44,7 +44,8 @@ unsigned UdpSocketClient::init() {
 	inet_pton(AF_INET, (PSTR)m_addr, &outIP);
 	m_serverAddr.sin_addr.S_un.S_addr = outIP;
 
-	int result = bind(m_socket, (SOCKADDR*)&m_serverAddr, sizeof(m_serverAddr));
+	// Bind for receiving
+	int result = bind(m_socket, (struct sockaddr*)&m_serverAddr, sizeof(m_serverAddr));
 	if (result == SOCKET_ERROR) {
 		int error = WSAGetLastError();
 		std::cerr << "Failed to bind: WSA Error " << error << std::endl;
@@ -52,17 +53,7 @@ unsigned UdpSocketClient::init() {
 	}
 }
 
-unsigned UdpSocketClient::sendMessage(const char* message, int length) {
-	//send the message
-	if (sendto(m_socket, message, length, 0, (struct sockaddr *) &m_serverAddr, m_socketLen) == SOCKET_ERROR) {
-		int err = WSAGetLastError();
-		std::cerr << " sendto() failed with error code: " << err << std::endl;
-		return 1;
-	}
-	return 0;
-}
-
-unsigned UdpSocketClient::receiveMessage(char* message, int length) {
+unsigned UdpSocketReceiver::receiveMessage(char* message, int length) {
 	//send the message
 	if (recvfrom(m_socket, message, length, 0, nullptr, nullptr) == SOCKET_ERROR) {
 		int err = WSAGetLastError();

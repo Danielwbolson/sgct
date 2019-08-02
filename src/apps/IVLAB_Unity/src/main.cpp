@@ -7,7 +7,8 @@
 #include <fstream>
 #include <string>
 
-#include "UdpSocketClient.h"
+#include "UdpSocketTransmitter.h"
+#include "UdpSocketReceiver.h"
 #include "webserver.h"
 #include "Socket.h"
 
@@ -91,25 +92,27 @@ const std::vector<GLfloat> _uv_buffer_data = {
 };
 // Quad indices coords
 const std::vector<GLuint> _indices_buffer_data = {
-	0,3,1, 3,2,1,        // Quad FLOOR
-	4,7,5, 7,6,5,        // Quad UP
 	8,11,9, 11,10,9,     // Quad LEFT
 	12,15,13, 15,14,13,  // Quad FORWARD
 	16,19,17, 19,18,17,  // Quad RIGHT
-	20,13,21, 23,22,21   // Quad BACK
+	0,3,1, 3,2,1,        // Quad FLOOR
+	20,13,21, 23,22,21,   // Quad BACK
+	4,7,5, 7,6,5,        // Quad UP
 };
 
 /// Server Info
-const int BUFFER_LENGTH = 44;
+#define SUCCESS 0
 const int REGISTER_PORT = 5000;
-const int TRACKING_PORT = 5001;
+const int MATRIX_PORT = 5001;
+const int TEXTURE_PORT = 5002;
 std::string UNITY_CLIENT = ""; // Address of Unity client
 bool UPDATE_IP = false; // Does the IP of the UDP client need to be updated?
 webserver* initServer = nullptr; // TCP server, used ONLY for initialization of connection between SGCT and Unity
-UdpSocketClient* udpServer = nullptr; // Server in charge of streaming between Unity and SGCT
+UdpSocketTransmitter* matrixTransmitter = nullptr; // Server in charge of streaming matrix data between Unity and SGCT
+UdpSocketReceiver* textureReceiver = nullptr; // Server in charge of streaming texture data between unity and sgct
 
 /// Containers for textures from Unity
-const int TEXTURE_BYTES_LENGTH = 7896 * 4; // 64 * 64 * 3 * 4; //960 * 1080 * 3 * 4; // size of screen capture, channels, num_images
+const int TEXTURE_BYTES_LENGTH = 7144 * 4; // 64 * 64 * 3 * 4; // 7896 * 4; //960 * 1080 * 3 * 4; // size of screen capture, channels, num_images
 unsigned char* rawTextureBytes = nullptr;
 unsigned char* bytes_img_0 = nullptr;
 unsigned char* bytes_img_1 = nullptr;
@@ -120,6 +123,9 @@ unsigned char* bytes_img_3 = nullptr;
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/square.png";
 //const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/test2.png";
 const std::string _texture_path = "../../../../src/apps/IVLAB_Unity/images/water.png";
+
+/// Offset for moving
+float offset = 0.0;
 
 /// Helper Functions
 void init(); // OpenGL Initialization
@@ -187,7 +193,8 @@ int main(int argc, char* argv[])
 	glDeleteVertexArrays(1, &_vao_vertex_container);
 
 	// Clean up server
-	delete udpServer;
+	delete matrixTransmitter;
+	delete textureReceiver;
 	delete initServer;
 
 	exit(EXIT_SUCCESS);
@@ -208,9 +215,15 @@ void init() {
 		}
 		std::cout << "Registered Unity Client: " << UNITY_CLIENT << std::endl;
 
-		udpServer = new UdpSocketClient(UNITY_CLIENT.c_str(), TRACKING_PORT);
+		// Set up matrix port
+		matrixTransmitter = new UdpSocketTransmitter(UNITY_CLIENT.c_str(), MATRIX_PORT);
+		std::cout << "Starting UDP matrix server on port " << MATRIX_PORT << "..." << std::endl;
+
+		// Set up texture port
+		textureReceiver = new UdpSocketReceiver(UNITY_CLIENT.c_str(), TEXTURE_PORT);
+		std::cout << "Starting UDP texture server on port " << TEXTURE_PORT << "..." << std::endl;
+
 		UPDATE_IP = false;
-		std::cout << "Starting UDP server on port " << TRACKING_PORT << "..." << std::endl;
 	}
 
 
@@ -310,36 +323,38 @@ void mainLoop() {
 
 		// Make dummy matrix to send over
 		float* matrix = new float[64] {
+			// LEFT camera
+				0.0, 0.0, 1.0, 0,
+				0.0, 1.0, 0.0, 0.0,
+				-1.0, 0.0, 0.0, 0.0,
+				0.0, 0.0, 0.0, 1.0,
+			// FRONT camera
+				1.0, 0.0, 0.0, 0,
+				0.0, 1.0, 0.0, 0.0,
+				0.0, 0.0, 1.0, 0.0,
+				0.0, 0.0, 0.0, 1.0,
+			// RIGHT camera
+				0.0, 0.0, -1.0, 0,
+				0.0, 1.0, 0.0, 0.0,
 				1.0, 0.0, 0.0, 0.0,
-				0.0, 1.0, 0.0, 0.0,
-				0.0, 0.0, 1.0, 0.0,
 				0.0, 0.0, 0.0, 1.0,
-
-				1.0, 0.0, 0.0, 1.0,
-				0.0, 1.0, 0.0, 0.0,
+			// FLOOR camera
+				1.0, 0.0, 0.0, 0,
 				0.0, 0.0, 1.0, 0.0,
-				0.0, 0.0, 0.0, 1.0,
-
-				1.0, 0.0, 0.0, 2.0,
-				0.0, 1.0, 0.0, 0.0,
-				0.0, 0.0, 1.0, 0.0,
-				0.0, 0.0, 0.0, 1.0,
-
-				1.0, 0.0, 0.0, 3.0,
-				0.0, 1.0, 0.0, 0.0,
-				0.0, 0.0, 1.0, 0.0,
+				0.0, -1.0, 0.0, 0.0,
 				0.0, 0.0, 0.0, 1.0
 		};
+		offset += 0.01;
 		int length = sizeof(float) * 64;
-		unsigned char* bytes = reinterpret_cast<unsigned char*>(matrix);
+		char* bytes = reinterpret_cast<char*>(matrix);
 
 		// If no error, do something
-		if (!udpServer->sendMessage(reinterpret_cast<char*>(bytes), length)) {
+		if (matrixTransmitter->sendMessage(bytes, length) == SUCCESS) {
 			delete[] bytes;
 		}
 
-		// If no error, move our raw bytes into individual arrays and then update textures
-		if (!udpServer->receiveMessage(reinterpret_cast<char*>(rawTextureBytes), TEXTURE_BYTES_LENGTH)) {
+		 //If no error, move our raw bytes into individual arrays and then update textures
+		if (textureReceiver->receiveMessage(reinterpret_cast<char*>(rawTextureBytes), TEXTURE_BYTES_LENGTH) == SUCCESS) {
 			// Copy memory over
 			bytes_img_0 = &rawTextureBytes[0];
 			bytes_img_1 = &rawTextureBytes[TEXTURE_BYTES_LENGTH / 4];
@@ -350,16 +365,16 @@ void mainLoop() {
 			sgct_core::Image* img = new sgct_core::Image();
 
 			glActiveTexture(GL_TEXTURE0);
-			img->loadJPEG(bytes_img_0, TEXTURE_BYTES_LENGTH / 4);
+			img->loadTGA(bytes_img_0, TEXTURE_BYTES_LENGTH / 4);
 			sgct::TextureManager::instance()->loadTexture("quad_texture0", img, true);
 			glActiveTexture(GL_TEXTURE1);
-			img->loadJPEG(bytes_img_1, TEXTURE_BYTES_LENGTH / 4);
+			img->loadTGA(bytes_img_1, TEXTURE_BYTES_LENGTH / 4);
 			sgct::TextureManager::instance()->loadTexture("quad_texture1", img, true);
 			glActiveTexture(GL_TEXTURE2);
-			img->loadJPEG(bytes_img_2, TEXTURE_BYTES_LENGTH / 4);
+			img->loadTGA(bytes_img_2, TEXTURE_BYTES_LENGTH / 4);
 			sgct::TextureManager::instance()->loadTexture("quad_texture2", img, true);
 			glActiveTexture(GL_TEXTURE3);
-			img->loadJPEG(bytes_img_3, TEXTURE_BYTES_LENGTH / 4);
+			img->loadTGA(bytes_img_3, TEXTURE_BYTES_LENGTH / 4);
 			sgct::TextureManager::instance()->loadTexture("quad_texture3", img, true);
 
 			delete img;

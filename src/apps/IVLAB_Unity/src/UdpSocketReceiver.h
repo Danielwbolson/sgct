@@ -7,13 +7,10 @@
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 
-class UdpSocketClient {
+class UdpSocketReceiver {
 public:
-	UdpSocketClient();
-	UdpSocketClient(const char addr[INET6_ADDRSTRLEN], int port);
-
-	// Send message to client
-	unsigned sendMessage(const char* message, int length);
+	UdpSocketReceiver();
+	UdpSocketReceiver(const char addr[INET6_ADDRSTRLEN], int port);
 
 	// Receive message from client
 	unsigned receiveMessage(char* message, int length);
