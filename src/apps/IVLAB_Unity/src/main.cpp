@@ -353,7 +353,10 @@ void mainLoop() {
 			delete[] bytes;
 		}
 
-		 //If no error, move our raw bytes into individual arrays and then update textures
+
+		/// Want to receive once, read metadata, then in a for loop receive from them on as read from metadata
+
+		// If no error, move our raw bytes into individual arrays and then update textures
 		if (textureReceiver->receiveMessage(reinterpret_cast<char*>(rawTextureBytes), TEXTURE_BYTES_LENGTH) == SUCCESS) {
 			// Copy memory over
 			bytes_img_0 = &rawTextureBytes[0];
